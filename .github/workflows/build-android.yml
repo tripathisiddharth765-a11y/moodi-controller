@@ -29,7 +29,9 @@ jobs:
           cache: true
 
       - name: Generate Android project
-        run: flutter create --platforms=android --org com.moodi --project-name moodi_app --no-pub .
+        run: |
+          flutter create --platforms=android --org com.moodi --project-name moodi_app --no-pub .
+          rm -f test/widget_test.dart
 
       - name: Configure Bluetooth permissions
         run: python3 scripts/prepare_android.py
