@@ -16,6 +16,7 @@ class MoodiHomePage extends StatefulWidget {
 }
 
 class _MoodiHomePageState extends State<MoodiHomePage> {
+
   // ============================================================
   // 1. BLE UUID CONFIGURATION
   // ============================================================
@@ -77,18 +78,23 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
 
   @override
   void initState() {
+
     super.initState();
 
     _statusSubscription = _ble.statusStream.listen((status) {
 
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       if (status != BleStatus.ready &&
           !_isConnected &&
           !_isScanning) {
 
         setState(() {
+
           _statusMessage = _bleStatusMessage(status);
+
         });
 
       }
@@ -155,7 +161,7 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
 
 
     // Android 11 and below require location permission for BLE scanning.
-    // MOODI does not read or transmit the phone's location.
+    // MOODI does not read, store, or transmit the phone's location.
 
     final status = await Permission.locationWhenInUse.request();
 
@@ -170,7 +176,9 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
 
   Future<void> _startScan() async {
 
-    if (_isScanning || _isConnecting || _isConnected) return;
+    if (_isScanning || _isConnecting || _isConnected) {
+      return;
+    }
 
 
     setState(() {
@@ -189,7 +197,10 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
       final permissionsGranted =
           await _requestBluetoothPermissions();
 
-      if (!mounted) return;
+
+      if (!mounted) {
+        return;
+      }
 
 
       if (!permissionsGranted) {
@@ -229,7 +240,9 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
             );
 
 
-        if (!mounted) return;
+        if (!mounted) {
+          return;
+        }
 
 
         if (readyStatus != BleStatus.ready) {
@@ -268,14 +281,19 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
 
         (device) async {
 
-          if (!_isScanning ||
-              _isConnecting ||
-              _isConnected) return;
+          if (!_isScanning || _isConnecting || _isConnected) {
+            return;
+          }
 
+
+          // Stop scanning before connecting.
 
           await _stopScan(updateUi: false);
 
-          if (!mounted) return;
+
+          if (!mounted) {
+            return;
+          }
 
 
           await _connectToDevice(device);
@@ -287,7 +305,9 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
 
           _scanTimer?.cancel();
 
-          if (!mounted) return;
+          if (!mounted) {
+            return;
+          }
 
 
           setState(() {
@@ -313,9 +333,10 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
 
           await _stopScan(updateUi: false);
 
-          if (!mounted ||
-              _isConnected ||
-              _isConnecting) return;
+
+          if (!mounted || _isConnected || _isConnecting) {
+            return;
+          }
 
 
           setState(() {
@@ -333,7 +354,9 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
 
     catch (error) {
 
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
 
       setState(() {
@@ -367,7 +390,11 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
 
     if (updateUi && mounted) {
 
-      setState(() => _isScanning = false);
+      setState(() {
+
+        _isScanning = false;
+
+      });
 
     }
 
@@ -388,7 +415,9 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
     DiscoveredDevice device,
   ) async {
 
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
 
 
     setState(() {
@@ -430,12 +459,13 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
           connectionTimeout: const Duration(seconds: 12),
 
         )
-
         .listen(
 
       (update) {
 
-        if (!mounted) return;
+        if (!mounted) {
+          return;
+        }
 
 
         // ------------------------------------------------------
@@ -445,20 +475,19 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
         if (update.connectionState ==
             DeviceConnectionState.connected) {
 
-
           setState(() {
 
             _isConnecting = false;
 
             _isConnected = true;
 
-            _statusMessage =
-                'Connected. Synchronizing time...';
+            _statusMessage = 'Connected. Synchronizing time...';
 
           });
 
 
           // Automatically send phone time.
+
           unawaited(
             _syncTimeToDevice(device.id),
           );
@@ -473,15 +502,13 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
         else if (update.connectionState ==
             DeviceConnectionState.connecting) {
 
-
           setState(() {
 
             _isConnecting = true;
 
             _isConnected = false;
 
-            _statusMessage =
-                'Connecting to $_deviceName…';
+            _statusMessage = 'Connecting to $_deviceName…';
 
           });
 
@@ -494,7 +521,6 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
 
         else if (update.connectionState ==
             DeviceConnectionState.disconnected) {
-
 
           setState(() {
 
@@ -518,7 +544,9 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
 
       onError: (Object error) {
 
-        if (!mounted) return;
+        if (!mounted) {
+          return;
+        }
 
 
         setState(() {
@@ -526,6 +554,8 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
           _isConnecting = false;
 
           _isConnected = false;
+
+          _isSending = false;
 
           _deviceId = null;
 
@@ -551,7 +581,9 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
     _connectionSubscription = null;
 
 
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
 
 
     setState(() {
@@ -580,38 +612,40 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
     String deviceId,
   ) async {
 
-
     if (!_isConnected ||
         _deviceId != deviceId ||
-        _isSending) return;
+        _isSending) {
+
+      return;
+
+    }
 
 
-    // Get phone's current local time.
+    // Get the phone's current local time.
 
     final DateTime now = DateTime.now();
 
 
-    // Unix timestamp represents an absolute UTC instant.
+    // Convert to Unix timestamp seconds.
 
     final int epochSeconds =
         now.toUtc().millisecondsSinceEpoch ~/ 1000;
 
 
-    // Get phone timezone offset in minutes.
+    // Get the phone timezone offset in minutes.
     // India = +330 minutes.
 
     final int timezoneOffsetMinutes =
         now.timeZoneOffset.inMinutes;
 
 
-    // Construct the ESP32 command.
-    // Example: 1793577600,330
+    // Construct ESP32 command.
 
     final String payload =
         '$epochSeconds,$timezoneOffsetMinutes';
 
 
-    // Identify the new time characteristic.
+    // Identify ESP32 time characteristic.
 
     final characteristic = QualifiedCharacteristic(
 
@@ -628,16 +662,14 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
 
       _isSending = true;
 
-      _statusMessage =
-          'Sending phone time to MOODI…';
+      _statusMessage = 'Sending phone time to MOODI…';
 
     });
 
 
     try {
 
-
-      // Send time through BLE with response.
+      // Send time through BLE.
 
       await _ble.writeCharacteristicWithResponse(
 
@@ -650,7 +682,11 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
 
       if (!mounted ||
           !_isConnected ||
-          _deviceId != deviceId) return;
+          _deviceId != deviceId) {
+
+        return;
+
+      }
 
 
       setState(() {
@@ -661,9 +697,7 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
       });
 
 
-      debugPrint(
-        'MOODI time payload sent: $payload',
-      );
+      debugPrint('MOODI time payload sent: $payload');
 
     }
 
@@ -672,7 +706,11 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
 
       if (!mounted ||
           !_isConnected ||
-          _deviceId != deviceId) return;
+          _deviceId != deviceId) {
+
+        return;
+
+      }
 
 
       setState(() {
@@ -683,9 +721,7 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
       });
 
 
-      debugPrint(
-        'MOODI time sync failed: $error',
-      );
+      debugPrint('MOODI time sync failed: $error');
 
     }
 
@@ -715,13 +751,16 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
     MoodiEmotion emotion,
   ) async {
 
-
     final deviceId = _deviceId;
 
 
     if (!_isConnected ||
         deviceId == null ||
-        _isSending) return;
+        _isSending) {
+
+      return;
+
+    }
 
 
     final characteristic = QualifiedCharacteristic(
@@ -747,7 +786,6 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
 
     try {
 
-
       // Send the existing emotion command.
 
       await _ble.writeCharacteristicWithResponse(
@@ -759,7 +797,9 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
       );
 
 
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
 
       setState(() {
@@ -778,7 +818,9 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
 
     catch (error) {
 
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
 
       setState(() {
@@ -795,7 +837,11 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
 
       if (mounted) {
 
-        setState(() => _isSending = false);
+        setState(() {
+
+          _isSending = false;
+
+        });
 
       }
 
@@ -840,8 +886,7 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
   @override
   Widget build(BuildContext context) {
 
-    final bool busy =
-        _isScanning || _isConnecting;
+    final bool busy = _isScanning || _isConnecting;
 
 
     return Scaffold(
@@ -851,7 +896,10 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
         child: SingleChildScrollView(
 
           padding: const EdgeInsets.fromLTRB(
-            20, 18, 20, 28,
+            20,
+            18,
+            20,
+            28,
           ),
 
           child: Column(
@@ -1570,17 +1618,11 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
 
                   ),
 
-                  if (selected &&
-                      _lastSentEmotion == emotion)
-
+                  if (selected && _lastSentEmotion == emotion)
                     const Icon(
-
                       Icons.check_circle,
-
                       color: Color(0xFF79E5D2),
-
                       size: 16,
-
                     ),
 
                 ],
@@ -1645,7 +1687,7 @@ class _MoodiHomePageState extends State<MoodiHomePage> {
 
             child: Text(
 
-              'Keep MOODI powered on and nearby. If you used nRF Connect earlier, disconnect it before connecting here. Emotion controls become active after the BLE connection is ready. Time and date are synchronized automatically when the connection is established.',
+              'Keep MOODI powered on and nearby. If you used nRF Connect earlier, disconnect it before connecting here. Emotion controls become active after the BLE connection is ready.',
 
               style: TextStyle(
 
