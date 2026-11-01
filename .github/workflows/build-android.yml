@@ -32,6 +32,54 @@ jobs:
         run: |
           flutter create --platforms=android --org com.moodi --project-name moodi_app --no-pub .
           rm -f test/widget_test.dart
+       
+      - name: Configure Android API 37
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          settings = Path("android/settings.gradle.kts")
+          if not settings.exists():
+              sys.exit("Android settings.gradle.kts not found")
+
+          content = settings.read_text()
+
+          content, count = re.subn(
+              r'(id\(["\']com\.android\.application["\']\)\s*version\s*["\'])9\.1\.0(["\'])',
+              r'\g<1>9.1.1\2',
+              content,
+              count=1
+          )
+
+          if count != 1:
+              sys.exit("Could not upgrade Android Gradle Plugin version")
+
+          settings.write_text(content)
+
+          app_file = Path("android/app/build.gradle.kts")
+          content = app_file.read_text()
+
+          content, count = re.subn(
+              r'(?m)^(\s*compileSdk\s*=\s*).+$',
+              r'\g<1>37',
+              content,
+              count=1
+          )
+
+          if count != 1:
+              sys.exit("Could not set compileSdk to 37")
+
+          app_file.write_text(content)
+
+          print("AGP updated to 9.1.1")
+          print("compileSdk updated to 37")
+          PY
+
+          yes | sdkmanager --licenses
+          sdkmanager --install "platforms;android-37"
+   
 
       - name: Configure Bluetooth permissions
         run: python3 scripts/prepare_android.py
