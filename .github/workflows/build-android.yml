@@ -11,10 +11,15 @@ permissions:
 
 jobs:
   build:
+    name: Test and build MOODI
     runs-on: ubuntu-latest
 
+    defaults:
+      run:
+        working-directory: moodi_flutter_app
+
     steps:
-      - name: Download project
+      - name: Checkout project
         uses: actions/checkout@v4
 
       - name: Install Flutter
@@ -45,5 +50,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: moodi-android-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: moodi_flutter_app/build/app/outputs/flutter-apk/app-release.apk
           retention-days: 30
