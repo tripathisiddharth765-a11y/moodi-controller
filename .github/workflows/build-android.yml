@@ -12,7 +12,7 @@ permissions:
 jobs:
   build:
     name: Test and build MOODI
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     defaults:
       run:
@@ -22,78 +22,124 @@ jobs:
       - name: Checkout project
         uses: actions/checkout@v4
 
-      - name: Install Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-      
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
+      - name: Set up Android SDK tools
         uses: android-actions/setup-android@v4
 
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
 
       - name: Generate Android project
         run: |
           flutter create --platforms=android --org com.moodi --project-name moodi_app --no-pub .
           rm -f test/widget_test.dart
-       
-      - name: Configure Android API 37
+
+      - name: Configure Android Gradle Plugin and SDK 37
+        shell: bash
         run: |
+          set -Eeuo pipefail
+
           python3 - <<'PY'
           from pathlib import Path
           import re
           import sys
 
           settings = Path("android/settings.gradle.kts")
-          if not settings.exists():
-              sys.exit("Android settings.gradle.kts not found")
+          if not settings.is_file():
+              sys.exit("Missing android/settings.gradle.kts")
 
-          content = settings.read_text()
-
-          content, count = re.subn(
-              r'(id\(["\']com\.android\.application["\']\)\s*version\s*["\'])9\.1\.0(["\'])',
+          settings_text = settings.read_text(encoding="utf-8")
+          settings_text, agp_count = re.subn(
+              r'(id\(["\']com\.android\.application["\']\)\s*version\s*["\'])[^"\']+(["\'])',
               r'\g<1>9.1.1\2',
-              content,
-              count=1
+              settings_text,
+              count=1,
           )
 
-          if count != 1:
-              sys.exit("Could not upgrade Android Gradle Plugin version")
+          if agp_count != 1:
+              sys.exit("Could not identify Android Gradle Plugin version")
 
-          settings.write_text(content)
+          settings.write_text(settings_text, encoding="utf-8")
 
-          app_file = Path("android/app/build.gradle.kts")
-          content = app_file.read_text()
+          app_gradle = Path("android/app/build.gradle.kts")
+          if not app_gradle.is_file():
+              sys.exit("Missing android/app/build.gradle.kts")
 
-          content, count = re.subn(
+          app_text = app_gradle.read_text(encoding="utf-8")
+          app_text, sdk_count = re.subn(
               r'(?m)^(\s*compileSdk\s*=\s*).+$',
               r'\g<1>37',
-              content,
-              count=1
+              app_text,
+              count=1,
           )
 
-          if count != 1:
-              sys.exit("Could not set compileSdk to 37")
+          if sdk_count != 1:
+              sys.exit("Could not identify compileSdk")
 
-          app_file.write_text(content)
+          app_gradle.write_text(app_text, encoding="utf-8")
 
-          print("AGP updated to 9.1.1")
-          print("compileSdk updated to 37")
+          wrapper = Path("android/gradle/wrapper/gradle-wrapper.properties")
+          if not wrapper.is_file():
+              sys.exit("Missing Gradle wrapper properties")
+
+          wrapper_text = wrapper.read_text(encoding="utf-8")
+          wrapper_text, gradle_count = re.subn(
+              r'(gradle-)[0-9.]+-(all|bin)\.zip',
+              r'\g<1>9.3.1-\2.zip',
+              wrapper_text,
+              count=1,
+          )
+
+          if gradle_count != 1:
+              sys.exit("Could not identify Gradle distribution URL")
+
+          wrapper.write_text(wrapper_text, encoding="utf-8")
+
+          print("Configured AGP 9.1.1, compileSdk 37, Gradle 9.3.1")
           PY
 
-          sdkmanager --install "platforms;android-37"
-   
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+
+          if [[ -z "$SDK_ROOT" ]]; then
+            echo "Android SDK environment variables are missing"
+            exit 1
+          fi
+
+          PLATFORMS="$SDK_ROOT/platforms"
+          mkdir -p "$PLATFORMS"
+
+          if [[ ! -d "$PLATFORMS/android-37.0" && ! -d "$PLATFORMS/android-37" ]]; then
+            echo "Installing Android API 37"
+
+            if ! sdkmanager --install "platforms;android-37.0"; then
+              sdkmanager --install "platforms;android-37"
+            fi
+          fi
+
+          if [[ -d "$PLATFORMS/android-37.0" && ! -e "$PLATFORMS/android-37" ]]; then
+            ln -s "$PLATFORMS/android-37.0" "$PLATFORMS/android-37"
+          fi
+
+          if [[ ! -f "$PLATFORMS/android-37/android.jar" ]]; then
+            echo "Android API 37 android.jar was not found"
+            ls -la "$PLATFORMS"
+            exit 1
+          fi
+
+          echo "Android API 37 configured successfully"
 
       - name: Configure Bluetooth permissions
         run: python3 scripts/prepare_android.py
 
-      - name: Install dependencies
+      - name: Install Flutter dependencies
         run: flutter pub get
 
       - name: Analyze Flutter code
@@ -102,7 +148,7 @@ jobs:
       - name: Run tests
         run: flutter test --no-pub
 
-      - name: Build APK
+      - name: Build release APK
         run: flutter build apk --release
 
       - name: Upload APK
@@ -110,4 +156,5 @@ jobs:
         with:
           name: moodi-android-apk
           path: moodi_flutter_app/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
           retention-days: 30
